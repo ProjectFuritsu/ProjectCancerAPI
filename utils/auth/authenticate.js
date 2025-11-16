@@ -1,4 +1,4 @@
-const con = require("../../con");
+const con = require("../db/con");
 const jwt = require("jsonwebtoken");
 /*
   Middleware to authenticate JWT token
@@ -27,7 +27,7 @@ async function AuthenticateToken(req, res, next) {
     delete payload.password; // Remove password from payload if present
     payload.access_token_id = token; // Add access_token_id to payload
 
-    console.log(payload);
+    // console.log(payload);
     
     // Check if the token's access_token_id exists in DB
     const session = await con.query(

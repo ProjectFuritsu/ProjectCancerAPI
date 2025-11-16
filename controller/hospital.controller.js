@@ -1,6 +1,4 @@
-import con from "../con.js";
-
-import arrayToJson from "../utils/converter/toJson.js";
+import con from "../utils/db/con.js";
 
 
 export async function get_hospital_list(req, res, next) {
@@ -15,7 +13,6 @@ export async function get_hospital_list(req, res, next) {
 
 
 export async function get_hospital_info(req, res, next) {
-
     const { id } = req.params;
     try {
 
@@ -138,8 +135,7 @@ export async function insert_hospital(req, res, next) {
         );
 
         const hospitalId = hospitalResult.rows[0].health_insti_id;
-        console.log("Hospital inserted with ID:", hospitalId);
-
+        
         // === Operating Hours ===
         if (Array.isArray(op_hr) && op_hr.length > 0) {
             for (const { service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code } of op_hr) {

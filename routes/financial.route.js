@@ -8,4 +8,5 @@ const financialrouter = express.Router();
 financialrouter.get('/',AuthenticateToken,get_financial_Insti_list);
 financialrouter.get('/:id',AuthenticateToken ,get_financial_Insti_info);
 financialrouter.delete('/:id',AuthenticateToken,delete_financial_Insti);
+
 module.exports = financialrouter;

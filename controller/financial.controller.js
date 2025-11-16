@@ -1,4 +1,4 @@
-import con from "../con.js";
+import con from "../utils/db/con.js";
 
 
 
@@ -121,11 +121,48 @@ export async function insert_financial_Insti(req, res, next) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        const result = await con.query(
-            `INSERT INTO health_insti (health_insti_name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;`,
+        const FinancialInstiresult = await con.query(
+           `INSERT INTO financial_institution(
+            financial_insti_name, geo_latitutde, geo_longhitude, city_zip_code, brgy_code, purok_code, province_code)
+            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
             [name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code]
         );
+
+        const FinancialInsiId = FinancialInstiresult.rows[0].financial_insti_id;
+
+        /*
+        ! TODO: These are the following Query that needs to add in the insertion of a instance of Financial Insti
+        * Insert to Financial Institution Table
+        INSERT INTO financial_institution(
+            financial_insti_name, geo_latitutde, geo_longhitude, city_zip_code, brgy_code, purok_code, province_code)
+            VALUES ( $1,$2,$3,$4,$5,$6,$7) RETURNING *;
+
+        * Insert to Financial Contact Details
+        INSERT INTO financial_contact_details(
+            contact_details_id, contact_detail, contact_type_id, financial_insti_id)
+            VALUES ($1, $2, $3, $4);
+
+        * Insert to Financial Operating Hours
+        INSERT INTO financial_insti_ophr(
+            service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID)
+            VALUES ($1,$2,$3,$4,$5,$6);
+        
+        * Insert Programs of Financial Insti
+        INSERT INTO program_offers(
+            program_name, program_desc, financial_insti_id, eligibility_id)
+            VALUES ($1,$2,$3,$4) RETURNING *;
+
+        * Insert Benefits of a Program
+        INSERT INTO program_benefits(
+            benef_name, benef_desc, program_id)
+            VALUES ($1,$2,$3);
+
+        * Insert Requirements of a Program
+        INSERT INTO program_requirements(
+            req_name, req_details, program_id)
+            VALUES ($1,$2,$3);
+        
+        */
 
         // return the inserted row and its primary key - adjust field name if your PK is `health_insti_id`
         const inserted = result && result.rows && result.rows[0];
