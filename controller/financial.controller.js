@@ -42,7 +42,7 @@ export async function get_financial_Insti_info(req, res, next) {
                 Concat_ws(' ',TO_CHAR(ophr.service_start_time,'HH24:MI'), ophr.start_time_type_code) as StartTime,
                 Concat_ws(' ',TO_CHAR(ophr.service_end_time,'HH24:MI'), ophr.end_time_type_code) as CloseTime
             FROM financial_institution as fi
-            JOIN financial_insti_ophr as ophr on ophr."financial_insti_ID" = fi.financial_insti_id
+            JOIN financial_insti_ophr as ophr on ophr."financial_insti_id" = fi.financial_insti_id
             JOIN provinces as prov ON prov.province_code = fi.province_code
             JOIN cities ON cities.city_zip_code = fi.city_zip_code
             JOIN barangays ON barangays.brgy_code = fi.brgy_code
@@ -61,21 +61,15 @@ export async function get_financial_Insti_info(req, res, next) {
         // Build programs array with extra details
         const programs = [];
         for (const program of fiprogramsResult.rows) {
-            const [programProceedure, programBenefits, programRequirements] = await Promise.all([
+            const [programBenefits, programRequirements] = await Promise.all([
                 con.query(`
-                    SELECT seq_no, program_steps_name, program_steps_desc 
-                    FROM program_offer_steps
-                    WHERE program_id = $1 
-                    ORDER BY seq_no
-                `, [program.program_id]),
-                con.query(`
-                    SELECT program_id, benef_name, benef_desc 
+                    SELECT benef_name, benef_desc 
                     FROM program_benefits
                     WHERE program_id = $1
                     ORDER BY benef_id
                 `, [program.program_id]),
                 con.query(`
-                    SELECT program_id, req_name, req_details 
+                    SELECT req_name, req_details 
                     FROM program_requirements
                     WHERE program_id = $1
                     ORDER BY program_req_id
@@ -85,8 +79,7 @@ export async function get_financial_Insti_info(req, res, next) {
             programs.push({
                 ...program,
                 Requirements: programRequirements.rows,
-                Benefits: programBenefits.rows,
-                Procedure: programProceedure.rows
+                Benefits: programBenefits.rows
             });
         }
 
@@ -126,8 +119,8 @@ export async function insert_financial_Insti(req, res, next) {
         const FinancialInstiresult = await con.query(
             `INSERT INTO financial_institution(
             financial_insti_name, geo_latitutde, geo_longhitude, city_zip_code, brgy_code, purok_code, province_code)
-            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-            [name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code]
+            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING financial_insti_id`,
+            [name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, purok_code, provincial_code]
         );
 
         const FinancialInsiId = FinancialInstiresult.rows[0].financial_insti_id;
@@ -171,9 +164,7 @@ export async function insert_financial_Insti(req, res, next) {
                 if (!service_start_time || !service_end_time || !service_day || !start_time_type_code || !end_time_type_code) continue;
 
                 await client.query(
-                    `INSERT INTO financial_insti_ophr(
-                service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID)
-                VALUES ($1,$2,$3,$4,$5,$6);`,
+                    `INSERT INTO financial_insti_ophr(service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID) VALUES ($1,$2,$3,$4,$5,$6);`,
                     [service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, FinancialInsiId]
                 );
             }
@@ -181,42 +172,41 @@ export async function insert_financial_Insti(req, res, next) {
 
         if (Array.isArray(program_offers) && program_offers.length > 0) {
             for (const program of program_offers) {
-                const { program_name, program_desc, benefits, requirements } = program;
+                const { program_name, program_desc, eligibility_id, benefits, requirements } = program;
                 if (!program_name || !program_desc) continue;
 
                 const program_offersResult = await client.query(
                     `INSERT INTO program_offers(
                     program_name, program_desc, financial_insti_id, eligibility_id)
                     VALUES ($1,$2,$3,$4) RETURNING *;`,
-                    [program_name, program_desc, FinancialInsiId]
+                    [program_name, program_desc, FinancialInsiId, eligibility_id]
                 );
 
-                const programId = serviceResult.rows[0].service_id;
+                const programId = program_offersResult.rows[0].program_id;
 
 
+                // Insert benefits
                 if (Array.isArray(benefits) && benefits.length > 0) {
-                    for (const { benef_name, benef_desc } of benefits.entries()) {
-                        if (!procedure_name || !procedure_desc) continue;
-
+                    for (const { benef_name, benef_desc } of benefits) {
+                        if (!benef_name || !benef_desc) continue;
                         await client.query(
-                            `INSERT INTO program_benefits(benef_name, benef_desc, program_id)
-                            VALUES ($1,$2,$3);`,
+                            `INSERT INTO program_benefits(benef_name, benef_desc, program_id) VALUES ($1,$2,$3)`,
                             [benef_name, benef_desc, programId]
                         );
-
-                        if (Array.isArray(requirements) && requirements.length > 0) {
-                            for (const { req_name, req_desc } of requirements) {
-                                if (!req_name || !req_desc) continue;
-                                await client.query(
-                                    `INSERT INTO program_requirements(req_name, req_details, program_id)
-                                    VALUES ($1,$2,$3);`,
-                                    [req_name, req_desc, programId]
-                                );
-                            }
-                        }
-
                     }
                 }
+
+                // Insert requirements
+                if (Array.isArray(requirements) && requirements.length > 0) {
+                    for (const { req_name, req_desc } of requirements) {
+                        if (!req_name || !req_desc) continue;
+                        await client.query(
+                            `INSERT INTO program_requirements(req_name, req_details, program_id) VALUES ($1,$2,$3)`,
+                            [req_name, req_desc, programId]
+                        );
+                    }
+                }
+
             }
         }
 
@@ -430,7 +420,7 @@ export async function delete_financial_Insti(req, res, next) {
             return res.status(404).json({ error: 'Institution not found' });
         }
         res.json({ message: 'Financial Institution deleted successfully', hospital: result.rows[0] });
-        
+
     } catch (err) {
         console.error('Deletion Error:', err);
         res.status(500).json({ error: 'Failed to delete a financial institution' });

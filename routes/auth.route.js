@@ -10,4 +10,4 @@ auth.post("/signup",signup)
 auth.post("/login",login)
 auth.delete("/logout", logout)
 
-module.exports = auth;
+module.exports = auth;  
