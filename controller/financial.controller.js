@@ -113,16 +113,18 @@ export async function get_financial_Insti_info(req, res, next) {
  * TODO NEXT TASK
  */
 export async function insert_financial_Insti(req, res, next) {
-
+    const client = await con.connect();
     try {
-        const { name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code } = req.body;
+        await client.query('BEGIN');
+
+        const { name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code, Contacts_Details, op_hr, program_offers } = req.body;
 
         if (!name || !geo_latitude || !geo_longhitude || !city_zip_code || !provincial_code) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
         const FinancialInstiresult = await con.query(
-           `INSERT INTO financial_institution(
+            `INSERT INTO financial_institution(
             financial_insti_name, geo_latitutde, geo_longhitude, city_zip_code, brgy_code, purok_code, province_code)
             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
             [name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code]
@@ -130,84 +132,292 @@ export async function insert_financial_Insti(req, res, next) {
 
         const FinancialInsiId = FinancialInstiresult.rows[0].financial_insti_id;
 
-        /*
-        ! TODO: These are the following Query that needs to add in the insertion of a instance of Financial Insti
-        * Insert to Financial Institution Table
-        INSERT INTO financial_institution(
-            financial_insti_name, geo_latitutde, geo_longhitude, city_zip_code, brgy_code, purok_code, province_code)
-            VALUES ( $1,$2,$3,$4,$5,$6,$7) RETURNING *;
+        // ! === Contact Details ===
+        if (Array.isArray(Contacts_Details) && Contacts_Details.length > 0) {
+            for (const { contact_type_name, contact_detail } of Contacts_Details) {
+                if (!contact_type_name || !contact_detail) continue;
 
-        * Insert to Financial Contact Details
-        INSERT INTO financial_contact_details(
-            contact_details_id, contact_detail, contact_type_id, financial_insti_id)
-            VALUES ($1, $2, $3, $4);
+                // Ensure contact type exists
+                const contactTypeResult = await client.query(
+                    `SELECT contact_type_id FROM contact_type WHERE LOWER(contact_type_name) = LOWER($1);`,
+                    [contact_type_name]
+                );
 
-        * Insert to Financial Operating Hours
-        INSERT INTO financial_insti_ophr(
-            service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID)
-            VALUES ($1,$2,$3,$4,$5,$6);
-        
-        * Insert Programs of Financial Insti
-        INSERT INTO program_offers(
-            program_name, program_desc, financial_insti_id, eligibility_id)
-            VALUES ($1,$2,$3,$4) RETURNING *;
+                let contactTypeId;
+                if (contactTypeResult.rows.length === 0) {
+                    const insertType = await client.query(
+                        `INSERT INTO contact_type (contact_type_name)
+                            VALUES ($1)
+                            RETURNING contact_type_id;`,
+                        [contact_type_name]
+                    );
+                    contactTypeId = insertType.rows[0].contact_type_id;
+                } else {
+                    contactTypeId = contactTypeResult.rows[0].contact_type_id;
+                }
 
-        * Insert Benefits of a Program
-        INSERT INTO program_benefits(
-            benef_name, benef_desc, program_id)
-            VALUES ($1,$2,$3);
+                await client.query(
+                    `INSERT INTO financial_contact_details(
+                        contact_detail, contact_type_id, financial_insti_id)
+                        VALUES ($1, $2, $3);`,
+                    [contact_detail, contactTypeId, FinancialInsiId]
+                );
+            }
+        }
 
-        * Insert Requirements of a Program
-        INSERT INTO program_requirements(
-            req_name, req_details, program_id)
-            VALUES ($1,$2,$3);
-        
-        */
+        // !  // === Operating Hours ===
+        if (Array.isArray(op_hr) && op_hr.length > 0) {
+            for (const { service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code } of op_hr) {
+                if (!service_start_time || !service_end_time || !service_day || !start_time_type_code || !end_time_type_code) continue;
 
-        // return the inserted row and its primary key - adjust field name if your PK is `health_insti_id`
-        const inserted = result && result.rows && result.rows[0];
-        const insertedId = inserted ? (inserted.health_insti_id || inserted.id) : null;
+                await client.query(
+                    `INSERT INTO financial_insti_ophr(
+                service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID)
+                VALUES ($1,$2,$3,$4,$5,$6);`,
+                    [service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, FinancialInsiId]
+                );
+            }
+        }
+
+        if (Array.isArray(program_offers) && program_offers.length > 0) {
+            for (const program of program_offers) {
+                const { program_name, program_desc, benefits, requirements } = program;
+                if (!program_name || !program_desc) continue;
+
+                const program_offersResult = await client.query(
+                    `INSERT INTO program_offers(
+                    program_name, program_desc, financial_insti_id, eligibility_id)
+                    VALUES ($1,$2,$3,$4) RETURNING *;`,
+                    [program_name, program_desc, FinancialInsiId]
+                );
+
+                const programId = serviceResult.rows[0].service_id;
+
+
+                if (Array.isArray(benefits) && benefits.length > 0) {
+                    for (const { benef_name, benef_desc } of benefits.entries()) {
+                        if (!procedure_name || !procedure_desc) continue;
+
+                        await client.query(
+                            `INSERT INTO program_benefits(benef_name, benef_desc, program_id)
+                            VALUES ($1,$2,$3);`,
+                            [benef_name, benef_desc, programId]
+                        );
+
+                        if (Array.isArray(requirements) && requirements.length > 0) {
+                            for (const { req_name, req_desc } of requirements) {
+                                if (!req_name || !req_desc) continue;
+                                await client.query(
+                                    `INSERT INTO program_requirements(req_name, req_details, program_id)
+                                    VALUES ($1,$2,$3);`,
+                                    [req_name, req_desc, programId]
+                                );
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+
+        await client.query('COMMIT');
         res.status(201).json({
-            message: 'Hospital added successfully',
-            hospital: inserted,
-            hospitalId: insertedId
+            message: "A new Financial Institutio was inserted successfully with all nested data",
+            FinancialInsiId
         });
+
+
     } catch (err) {
-        console.error('Error inserting hospital:', err);
-        res.status(500).json({ error: 'Failed to insert hospital' });
+        await client.query('ROLLBACK');
+        console.error("Insertion Error:", err);
+        res.status(500).json({ Error: err.message });
+    } finally {
+        client.release();
     }
 }
 
-/**
- * 
- * @param {*} req 
- * @param {*} res 
- * @param {*} next 
- * @returns 
- */
-export async function update_financial_Insti(req, res, next) {
-    const { id } = req.params;
-    const { name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code } = req.body;
 
-    if (!name || !geo_latitude || !geo_longhitude || !city_zip_code || !provincial_code) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
+export async function update_financial_Insti(req, res, next) {
+
+    const client = await con.connect();
+
 
     try {
-        const result = await con.query(
-            `UPDATE health_insti 
-                SET health_insti_name = $1, geo_latitude = $2, geo_longhitude = $3, city_zip_code = $4, brgy_code = $5, provincial_code = $6, purok_code = $7
-                WHERE health_insti_id = $8 RETURNING *;`,
-            [name, geo_latitude, geo_longhitude, city_zip_code, brgy_code, provincial_code, purok_code, id]
-        );
+        const { id } = req.params;
+        const {
+            name,
+            geo_latitutde,
+            geo_longhitude,
+            city_zip_code,
+            brgy_code,
+            provincial_code,
+            prk_code,
+            contacts_details,
+            op_hr,
+            program_offers
+        } = req.body;
 
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Hospital not found' });
+        await client.query("BEGIN");
+
+
+        // --- Base hospital info update ---
+        const updateMap = {
+            financial_insti_name: name,
+            geo_latitutde,
+            geo_longhitude,
+            city_zip_code,
+            brgy_code,
+            provincial_code,
+            purok_code: prk_code
+        };
+
+
+        const fields = [];
+        const values = [];
+        let i = 1;
+
+        for (const [key, val] of Object.entries(updateMap)) {
+            if (val !== undefined) {
+                fields.push(`${key} = $${i++}`);
+                values.push(val);
+            }
         }
-        res.json({ message: 'Hospital updated successfully', hospital: result.rows[0] });
+
+        if (fields.length > 0) {
+            values.push(id);
+            await client.query(
+                `UPDATE financial_institution SET ${fields.join(", ")} WHERE financial_insti_id = $${i}`,
+                values
+            );
+        }
+
+
+
+        if (Array.isArray(contacts_details)) {
+            for (const c of contacts_details) {
+                const { contact_id, contact_type_id, contact_detail } = c;
+                if (!contact_type_id || !contact_detail) continue;
+
+                if (contact_id) {
+                    await client.query(
+                        `UPDATE public.financial_contact_details
+                        SET contact_details_id=$1, contact_detail=$2
+                        WHERE contact_details_id=$3 and financial_insti_id =$4;`,
+                        [contact_type_id, contact_detail, contact_id, id]
+                    );
+                } else {
+                    await client.query(
+                        `INSERT INTO financial_contact_details(
+                        contact_detail, contact_type_id, financial_insti_id)
+                        VALUES ($1, $2, $3);`,
+                        [contact_detail, contact_type_id, id]
+                    );
+                }
+            }
+        }
+
+        if (Array.isArray(op_hr)) {
+            for (const c of op_hr) {
+                const { service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code } = c;
+                if (!service_start_time || !service_end_time || !service_day || !start_time_type_code || !end_time_type_code) continue;
+
+                if (contact_id) {
+                    await client.query(
+                        `UPDATE public.financial_contact_details
+                        SET contact_details_id=$1, contact_detail=$2
+                        WHERE contact_details_id=$3 and financial_insti_id =$4;`,
+                        [contact_type_id, contact_detail, contact_id, id]
+                    );
+                } else {
+                    await client.query(
+                        `INSERT INTO financial_insti_ophr(
+                    service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID)
+                    VALUES ($1,$2,$3,$4,$5,$6);`,
+                        [service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, id]
+                    );
+                }
+            }
+        }
+
+
+
+        if (Array.isArray(program_offers)) {
+            for (const prg of program_offers) {
+                const { program_id, program_name, program_desc, eligibility_id, benefits, requirements } = prg;
+
+                let currentprogramid = program_id;
+
+                if (service_id) {
+                    await client.query(
+                        `UPDATE program_offers
+                        SET program_name = $1, program_desc = $2, eligibility_id = $3
+                        WHERE program_id = $4 AND financial_insti_id = $5`,
+                        [program_name, program_desc, eligibility_id, program_id, id]
+                    );
+                } else {
+                    const svcRes = await client.query(
+                        `INSERT INTO program_offers (program_name, program_desc, financial_insti_id)
+                        VALUES ($1, $2, $3)
+                        RETURNING program_id`,
+                        [program_name, program_desc, id]
+                    );
+                    currentprogramid = svcRes.rows[0].program_id;
+                }
+
+                if (Array.isArray(requirements)) {
+                    for (const req of requirements) {
+                        const { req_id, req_name, req_desc } = req;
+                        if (!req_name || !req_desc) continue;
+
+
+                        if (req_id) {
+                            await client.query(
+                                `UPDATE program_requirements
+                                SET req_name=$1, req_details=$2 WHERE program_req_id = $3 AND program_id = $4`,
+                                [req_name, req_desc, req_id, currentprogramid]
+                            );
+                        } else {
+                            await client.query(
+                                `INSERT INTO program_requirements(req_name, req_details, program_id)
+                                    VALUES ($1,$2,$3);`,
+                                [req_name, req_desc, currentprogramid]
+                            );
+                        }
+                    }
+                }
+
+                if (Array.isArray(benefits)) {
+                    for (const benif of benefits) {
+                        const { benef_id, benef_name, benef_desc } = benif;
+                        if (!benef_name || !benef_desc) continue;
+
+                        if (benef_id) {
+                            await client.query(
+                                `UPDATE public.program_benefits
+                                SET benef_name=$1, benef_desc=$2
+                                WHERE benef_id = $3 and program_id = $4;`,
+                                [benef_name, benef_desc, benef_id, currentprogramid]
+                            );
+                        } else {
+                            await client.query(
+                                `INSERT INTO program_benefits(benef_name, benef_desc, program_id)
+                                VALUES ($1,$2,$3);`,
+                                [benef_name, benef_desc, currentprogramid]
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        await client.query("COMMIT");
+        res.json({ message: "A Financial Insitution data was updated successfully", FinancialInsiId: id });
     } catch (err) {
-        console.error('Error updating hospital:', err);
-        res.status(500).json({ error: 'Failed to update hospital' });
+        await client.query("ROLLBACK");
+        console.error("Patch Error:", err);
+        res.status(500).json({ error: "Failed to update financial institution" });
+    } finally {
+        client.release();
     }
 }
 
@@ -215,14 +425,15 @@ export async function delete_financial_Insti(req, res, next) {
     const { id } = req.params;
 
     try {
-        const result = await con.query('DELETE FROM health_insti WHERE health_insti_id = $1 RETURNING *;', [id]);
+        const result = await con.query('DELETE FROM financial_institution WHERE financial_insti_id = $1;', [id]);
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Hospital not found' });
+            return res.status(404).json({ error: 'Institution not found' });
         }
-        res.json({ message: 'Hospital deleted successfully', hospital: result.rows[0] });
+        res.json({ message: 'Financial Institution deleted successfully', hospital: result.rows[0] });
+        
     } catch (err) {
-        console.error('Error deleting hospital:', err);
-        res.status(500).json({ error: 'Failed to delete hospital' });
+        console.error('Deletion Error:', err);
+        res.status(500).json({ error: 'Failed to delete a financial institution' });
     }
 }
 
