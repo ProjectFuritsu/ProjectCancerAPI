@@ -1,13 +1,6 @@
 import con from "../utils/db/con.js";
 
 
-
-/**
- * 
- * 
- * * This is also done 
- * 
- */
 export async function get_financial_Insti_list(req, res, next) {
     try {
         const result = await con.query('SELECT financial_insti_id, financial_insti_name FROM financial_institution ORDER BY financial_insti_id ASC');
@@ -19,13 +12,6 @@ export async function get_financial_Insti_list(req, res, next) {
 }
 
 
-
-
-/**
- * 
- * * This is finished and needs optimization and documentation
- * 
- */
 export async function get_financial_Insti_info(req, res, next) {
 
     const { id } = req.params;
@@ -97,14 +83,6 @@ export async function get_financial_Insti_info(req, res, next) {
     }
 }
 
-/**
- * 
- * @param { Details of a financial Institution [name, ophr, programs, etc]} req 
- * @param {status codes} res 
- * @returns status code of 201
- * 
- * TODO NEXT TASK
- */
 export async function insert_financial_Insti(req, res, next) {
     const client = await con.connect();
     try {
@@ -225,7 +203,6 @@ export async function insert_financial_Insti(req, res, next) {
         client.release();
     }
 }
-
 
 export async function update_financial_Insti(req, res, next) {
 
@@ -426,6 +403,3 @@ export async function delete_financial_Insti(req, res, next) {
         res.status(500).json({ error: 'Failed to delete a financial institution' });
     }
 }
-
-
-
