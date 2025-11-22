@@ -1,15 +1,16 @@
 import con from "../utils/db/con.js";
 
 
-export function get_feeds_list(req, res, next) {
+export async function get_feeds_list(req, res, next) {
     try {
-        con.query('SELECT publication_title,publication_date FROM publications ORDER BY publication_title ASC;');
+        const result = await con.query(
+            'SELECT publication_id, publication_title, publication_date FROM publications ORDER BY publication_title ASC'
+        );
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching Financial Institution list:', err);
-        res.status(500).json({ error: 'Failed to fetch Financial Institution list' });
+        console.error('Fetching Error:', error);
+        res.status(500).json({ error: 'Failed to fetch feeds list' });
     }
-
 }
 
 
@@ -95,14 +96,18 @@ export async function insert_new_feed(req, res, next) {
         };
 
         // Step 2: Map authors, types, contents, references
-        await bulkInsertMulti('publication_author', ['publication_id', 'author_id'], authors.map(id => [pubId, id]));
-        await bulkInsertMulti('publication_type', ['publication_id', 'type_id'], types.map(id => [pubId, id]));
+        await bulkInsertMulti('publication_author_map', ['publication_id', 'author_id'], authors.map(id => [pubId, id]));
+        await bulkInsertMulti('publication_type_map', ['publication_id', 'publication_type_code'], types.map(id => [pubId, id]));
         await bulkInsertMulti(
             'publication_content',
             ['publication_id', 'content_detail', 'seq_no'],
             contents.map((c, index) => [pubId, c, index + 1]) // index + 1 is the seq_no
         );
-        await bulkInsertMulti('publication_reference', ['publication_id', 'ref_detail'], references.map(r => [pubId, r]));
+        await bulkInsertMulti(
+            'publication_reference',
+            ['publication_id', 'ref_detail', 'ref_link'],
+            references.map(ref => [pubId, ref.ref_detail, ref.ref_link])
+        );
 
         await client.query('COMMIT');
         res.json({ success: true, publication_id: pubId });
@@ -114,48 +119,73 @@ export async function insert_new_feed(req, res, next) {
         client.release();
     }
 }
-
-// Insert a new author
 export async function insert_new_author(req, res, next) {
-    const { author_name } = req.body;
+    let { authors } = req.body;
 
-    if (!author_name) {
-        return res.status(400).json({ error: "author_name is required" });
+    if (!authors) {
+        return res.status(400).json({ error: "authors field is required" });
+    }
+
+    // Wrap single string into array
+    if (!Array.isArray(authors)) {
+        authors = [authors];
+    }
+
+    // Filter out empty strings/nulls
+    authors = authors.filter(a => a && a.trim().length > 0);
+
+    if (authors.length === 0) {
+        return res.status(400).json({ error: "No valid authors to insert" });
     }
 
     try {
-        const result = await con.query(
-            'INSERT INTO publication_author (author_name) VALUES ($1) RETURNING author_id',
-            [author_name]
-        );
+        const inserted = [];
 
-        res.json({ success: true, author_id: result.rows[0].author_id, author_name });
+        for (const author_name of authors) {
+            const result = await con.query(
+                'INSERT INTO publication_author (author_name) VALUES ($1) RETURNING author_id',
+                [author_name]
+            );
+            inserted.push({ author_id: result.rows[0].author_id, author_name });
+        }
+
+        res.json({ success: true, inserted });
     } catch (error) {
-        console.error("Error inserting new author:", error);
-        res.status(500).json({ error: "Failed to insert new author" });
+        console.error("Error inserting authors:", error);
+        res.status(500).json({ error: "Failed to insert authors" });
     }
 }
+
 
 // Insert a new publication type
 export async function insert_new_type(req, res, next) {
-    const { type_description } = req.body;
+    const { types } = req.body;
 
-    if (!type_description) {
-        return res.status(400).json({ error: "type_description is required" });
+    if (!Array.isArray(types) || types.length === 0) {
+        return res.status(400).json({ error: "types array is required" });
     }
 
     try {
-        const result = await con.query(
-            'INSERT INTO publication_type (type_description) VALUES ($1) RETURNING publication_type_code',
-            [type_description]
-        );
+        const inserted = [];
 
-        res.json({ success: true, type_code: result.rows[0].publication_type_code, type_description });
+        for (const t of types) {
+            const type_description = typeof t === "string" ? t : t.type_description;
+            if (!type_description) continue;
+
+            const result = await con.query(
+                'INSERT INTO publication_type (type_description) VALUES ($1) RETURNING publication_type_code',
+                [type_description]
+            );
+            inserted.push({ type_code: result.rows[0].publication_type_code, type_description });
+        }
+
+        res.json({ success: true, inserted });
     } catch (error) {
-        console.error("Error inserting new type:", error);
-        res.status(500).json({ error: "Failed to insert new publication type" });
+        console.error("Error inserting new types:", error);
+        res.status(500).json({ error: "Failed to insert publication types" });
     }
 }
+
 
 
 export async function patch_update_publication(req, res, next) {

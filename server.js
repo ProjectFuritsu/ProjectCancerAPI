@@ -8,6 +8,7 @@ const router = exp.Router();
 const financial_router = require('./routes/financial.route')
 const health_insti_router = require('./routes/hospitals.route');
 const auth_router = require('./routes/auth.route');
+const feeds_router = require('./routes/feeds.route');
 
 
 app.use(exp.json());
@@ -36,7 +37,8 @@ router.get("/", (req, res) => {
 app.use("/v1", router);
 app.use("/v1/healthinsti",health_insti_router);
 app.use("/v1/financial",financial_router);
-app.use("/v1/auth",auth_router)
+app.use("/v1/auth",auth_router);
+app.use("/v1/feed",feeds_router)
 
 // Then handle undefined routes
 app.use((req, res) => {
