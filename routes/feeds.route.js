@@ -8,7 +8,7 @@ const feedsrouter = express.Router();
 feedsrouter.get('/', AuthenticateToken, get_feeds_list);
 feedsrouter.get('/:id', AuthenticateToken, get_feeds_info);
 feedsrouter.delete('/:publication_id', AuthenticateToken, delete_new_feed);
-feedsrouter.put('/:id', AuthenticateToken, patch_update_publication);
+feedsrouter.put('/:publication_id', AuthenticateToken, patch_update_publication);
 feedsrouter.post('/', AuthenticateToken, insert_new_feed);
 
 // ? This is the routes for Types

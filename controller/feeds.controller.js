@@ -66,14 +66,14 @@ export async function get_feeds_info(req, res, next) {
 }
 
 export async function insert_new_feed(req, res, next) {
-    const client = await con.connect(); // if using a pool
+  
     try {
-        await client.query('BEGIN');
+        await con.query('BEGIN');
 
         const { title, date, authors = [], types = [], contents = [], references = [] } = req.body;
 
         // Step 1: Insert publication
-        const pubRes = await client.query(
+        const pubRes = await con.query(
             'INSERT INTO publications (publication_title, publication_date) VALUES ($1, $2) RETURNING publication_id',
             [title, date]
         );
@@ -92,7 +92,7 @@ export async function insert_new_feed(req, res, next) {
             }).join(', ');
 
             const query = `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders}`;
-            await client.query(query, flatValues);
+            await con.query(query, flatValues);
         };
 
         // Step 2: Map authors, types, contents, references
@@ -109,18 +109,49 @@ export async function insert_new_feed(req, res, next) {
             references.map(ref => [pubId, ref.ref_detail, ref.ref_link])
         );
 
-        await client.query('COMMIT');
+        await con.query('COMMIT');
         res.json({ success: true, publication_id: pubId });
 
     } catch (error) {
-        await client.query('ROLLBACK');
+        await con.query('ROLLBACK');
         next(error);
     } finally {
-        client.release();
+        con.release();
     }
 }
+
+
+// Insert a new publication type and author
+export async function insert_new_type(req, res, next) {
+    const { types } = req.body;
+
+    if (!Array.isArray(types) || types.length === 0) {
+        return res.status(400).json({ error: "types array is required" });
+    }
+
+    try {
+        const inserted = [];
+
+        for (const t of types) {
+            const type_description = typeof t === "string" ? t : t.type_description;
+            if (!type_description) continue;
+
+            const result = await con.query(
+                'INSERT INTO publication_type (type_description) VALUES ($1) RETURNING publication_type_code',
+                [type_description]
+            );
+            inserted.push({ type_code: result.rows[0].publication_type_code, type_description });
+        }
+
+        res.json({ success: true, inserted });
+    } catch (error) {
+        console.error("Error inserting new types:", error);
+        res.status(500).json({ error: "Failed to insert publication types" });
+    }
+}
+
 export async function insert_new_author(req, res, next) {
-    let { authors } = req.body;
+    const { authors } = req.body;
 
     if (!authors) {
         return res.status(400).json({ error: "authors field is required" });
@@ -157,46 +188,16 @@ export async function insert_new_author(req, res, next) {
 }
 
 
-// Insert a new publication type
-export async function insert_new_type(req, res, next) {
-    const { types } = req.body;
 
-    if (!Array.isArray(types) || types.length === 0) {
-        return res.status(400).json({ error: "types array is required" });
-    }
-
-    try {
-        const inserted = [];
-
-        for (const t of types) {
-            const type_description = typeof t === "string" ? t : t.type_description;
-            if (!type_description) continue;
-
-            const result = await con.query(
-                'INSERT INTO publication_type (type_description) VALUES ($1) RETURNING publication_type_code',
-                [type_description]
-            );
-            inserted.push({ type_code: result.rows[0].publication_type_code, type_description });
-        }
-
-        res.json({ success: true, inserted });
-    } catch (error) {
-        console.error("Error inserting new types:", error);
-        res.status(500).json({ error: "Failed to insert publication types" });
-    }
-}
-
-
-
+// Update a publication
 export async function patch_update_publication(req, res, next) {
-    const client = await con.connect();
     try {
         const { publication_id } = req.params;
         const { title, date, authors, types, contents, references } = req.body;
 
         if (!publication_id) throw new Error("publication_id is required");
 
-        await client.query("BEGIN");
+        await con.query("BEGIN");
 
         // --- Update main publication info ---
         const updateMap = {
@@ -217,7 +218,7 @@ export async function patch_update_publication(req, res, next) {
 
         if (fields.length > 0) {
             values.push(publication_id);
-            await client.query(
+            await con.query(
                 `UPDATE publications SET ${fields.join(", ")} WHERE publication_id = $${idx}`,
                 values
             );
@@ -226,9 +227,9 @@ export async function patch_update_publication(req, res, next) {
         // --- Authors ---
         if (Array.isArray(authors)) {
             // Remove existing authors and insert the new list
-            await client.query("DELETE FROM publication_author_map WHERE publication_id = $1", [publication_id]);
+            await con.query("DELETE FROM publication_author_map WHERE publication_id = $1", [publication_id]);
             for (const author_id of authors) {
-                await client.query(
+                await con.query(
                     "INSERT INTO publication_author_map (publication_id, author_id) VALUES ($1, $2)",
                     [publication_id, author_id]
                 );
@@ -237,9 +238,9 @@ export async function patch_update_publication(req, res, next) {
 
         // --- Types ---
         if (Array.isArray(types)) {
-            await client.query("DELETE FROM publication_type_map WHERE publication_id = $1", [publication_id]);
+            await con.query("DELETE FROM publication_type_map WHERE publication_id = $1", [publication_id]);
             for (const type_id of types) {
-                await client.query(
+                await con.query(
                     "INSERT INTO publication_type_map (publication_id, publication_type_code) VALUES ($1, $2)",
                     [publication_id, type_id]
                 );
@@ -248,9 +249,9 @@ export async function patch_update_publication(req, res, next) {
 
         // --- Contents ---
         if (Array.isArray(contents)) {
-            await client.query("DELETE FROM publication_content WHERE publication_id = $1", [publication_id]);
+            await con.query("DELETE FROM publication_content WHERE publication_id = $1", [publication_id]);
             for (const [index, content] of contents.entries()) {
-                await client.query(
+                await con.query(
                     "INSERT INTO publication_content (publication_id, content_detail, seq_no) VALUES ($1, $2, $3)",
                     [publication_id, content, index + 1]
                 );
@@ -259,13 +260,13 @@ export async function patch_update_publication(req, res, next) {
 
         // --- References ---
         if (Array.isArray(references)) {
-            await client.query("DELETE FROM publication_reference WHERE publication_id = $1", [publication_id]);
+            await con.query("DELETE FROM publication_reference WHERE publication_id = $1", [publication_id]);
 
             for (const ref of references.entries()) {
                 const { ref_detail, ref_link } = ref;
                 if (!ref_detail) continue;
 
-                await client.query(
+                await con.query(
                     "INSERT INTO publication_reference (publication_id, ref_detail, ref_link) VALUES ($1, $2, $3)",
                     [publication_id, ref_detail, ref_link] // seq_no preserves order
                 );
@@ -273,15 +274,13 @@ export async function patch_update_publication(req, res, next) {
         }
 
 
-        await client.query("COMMIT");
+        await con.query("COMMIT");
         res.json({ message: "Publication updated successfully", publication_id });
 
     } catch (err) {
-        await client.query("ROLLBACK");
+        await con.query("ROLLBACK");
         console.error("Error updating publication:", err);
-        res.status(500).json({ error: "Failed to update publication" });
-    } finally {
-        client.release();
+        res.status(500).json({ error: "Failed to update publication:", err });
     }
 }
 
