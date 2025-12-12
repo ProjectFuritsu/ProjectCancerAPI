@@ -1,3 +1,4 @@
+
 # Logs
 logs
 *.log
@@ -69,6 +70,7 @@ web_modules/
 .env
 .env.*
 !.env.example
+.node_modules
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -113,7 +115,7 @@ dist
 # FuseBox cache
 .fusebox/
 
-# DynamoDB Local files
+# Dynamo     Local files
 .dynamodb/
 
 # Firebase cache directory
