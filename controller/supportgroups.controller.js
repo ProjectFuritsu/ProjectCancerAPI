@@ -1,4 +1,4 @@
-import con from "../utils/db/con.js";
+import con from "../db/connection.js";
 
 /**
  * ? The following tables are included in these functions:

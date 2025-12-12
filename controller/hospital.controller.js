@@ -1,4 +1,4 @@
-import con from "../utils/db/con.js";
+import con from "../db/connection.js";
 
 
 export async function get_hospital_list(req, res, next) {

@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import con from "../utils/db/con.js";
+import con from "../db/connection.js";
 import bcrypt from "bcryptjs";
 import validator from "validator";
 
@@ -27,7 +27,7 @@ import GenerateAccessToken from "../utils/auth/generatetoken.js";
 
   * The response contains the new access token.
 */
-export async function refreshtoken(req, res)  {
+export async function refreshtoken(req, res) {
   const { refresh_token } = req.body;
 
   if (!refresh_token) return res.sendStatus(401);
@@ -54,7 +54,7 @@ export async function refreshtoken(req, res)  {
         [access_token, refresh_token]
       );
 
-      
+
       res.json({ access_token });
     });
 
@@ -91,7 +91,7 @@ export async function refreshtoken(req, res)  {
   * The response contains a success message.
 
 */
-export async function signup (req, res)  {
+export async function signup(req, res) {
   // get data from request body
   const { fname, lname, suffix, contact_number, date_of_birth, email, password, pin, city_zip_code, brgy_code, prov_code, prk_code, role_id, cancer_type_code, gender_code, ethnic_code, occu_code } = req.body;
 
@@ -205,9 +205,17 @@ export async function login(req, res) {
 
       await con.query(insert_session, params);
 
+
     } catch (err) {
+      // PostgreSQL duplicate key error
+      if (err.code === "23505") {
+        return res.status(409).json({
+          error: "Session already exists"
+        });
+      }
+
       console.error(err);
-      return res.status(500).json({ error: "Database error" });
+      return res.status(500).json({ error: "Session Database error" });
     }
 
     res.setHeader("Authorization", `Bearer ${access_token}`);
@@ -248,7 +256,7 @@ export async function login(req, res) {
 
   * The response contains a success message.
 */
-export async function logout (req, res) {
+export async function logout(req, res) {
   const { refresh_token } = req.body;
   if (!refresh_token) return res.sendStatus(400);
 

@@ -1,4 +1,4 @@
-import con from "../utils/db/con.js";
+import con from "../db/connection.js";
 
 
 export async function get_financial_Insti_list(req, res, next) {
@@ -142,7 +142,7 @@ export async function insert_financial_Insti(req, res, next) {
                 if (!service_start_time || !service_end_time || !service_day || !start_time_type_code || !end_time_type_code) continue;
 
                 await client.query(
-                    `INSERT INTO financial_insti_ophr(service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_ID) VALUES ($1,$2,$3,$4,$5,$6);`,
+                    `INSERT INTO financial_insti_ophr(service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, financial_insti_id) VALUES ($1,$2,$3,$4,$5,$6);`,
                     [service_start_time, service_end_time, service_day, start_time_type_code, end_time_type_code, FinancialInsiId]
                 );
             }

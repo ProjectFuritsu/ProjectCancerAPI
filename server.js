@@ -24,6 +24,7 @@ app.use(exp.json());
     GET /
   * The response contains basic information about the API.
 */
+
 router.get("/", (req, res) => {
   res.json({
     name: "Welcome to Project Cancer API",

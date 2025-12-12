@@ -1,4 +1,4 @@
-const con = require("../db/con");
+const con = require("../../db/connection");
 const jwt = require("jsonwebtoken");
 /*
   Middleware to authenticate JWT token
