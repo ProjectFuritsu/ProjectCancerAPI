@@ -11,4 +11,4 @@ const pool = new Pool({
 pool.on("connect", () => console.log("✅ Connected to the database"));
 pool.on("error", (err) => console.error("❌ Database error:", err));
 
-module.exports = pool;a
+module.exports = pool;

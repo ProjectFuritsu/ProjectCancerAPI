@@ -46,13 +46,14 @@ export async function get_feeds_info(req, res, next) {
             `SELECT pa.author_name
              FROM publication_author_map AS pam
              JOIN publication_author AS pa
-                 ON pa.author_id = pam.author_id
+                 ON pa.author_id = pam.publication_author_id
              WHERE pam.publication_id = $1`,
             [id]
         );
 
         res.json({
             ...feed.rows[0],               // title + date
+            mainauthr: author.rows.length > 0 ? author.rows[0].author_name : null, // primary author
             authors: author.rows,          // array of authors
             types: type.rows,              // array of types
             content: content.rows,         // ordered content list
@@ -96,7 +97,7 @@ export async function insert_new_feed(req, res, next) {
         };
 
         // Step 2: Map authors, types, contents, references
-        await bulkInsertMulti('publication_author_map', ['publication_id', 'author_id'], authors.map(id => [pubId, id]));
+        await bulkInsertMulti('publication_author_map', ['publication_id', 'publication_author_id'], authors.map(id => [pubId, id]));
         await bulkInsertMulti('publication_type_map', ['publication_id', 'publication_type_code'], types.map(id => [pubId, id]));
         await bulkInsertMulti(
             'publication_content',
@@ -145,13 +146,13 @@ export async function insert_new_type(req, res, next) {
 
         res.json({ success: true, inserted });
     } catch (error) {
-        console.error("Error inserting new types:", error);
+        console.error("Error inserting new type:", error);
         res.status(500).json({ error: "Failed to insert publication types" });
     }
 }
 
 export async function insert_new_author(req, res, next) {
-    const { authors } = req.body;
+    var { authors } = req.body;
 
     if (!authors) {
         return res.status(400).json({ error: "authors field is required" });
@@ -186,8 +187,6 @@ export async function insert_new_author(req, res, next) {
         res.status(500).json({ error: "Failed to insert authors" });
     }
 }
-
-
 
 // Update a publication
 export async function patch_update_publication(req, res, next) {
@@ -230,7 +229,7 @@ export async function patch_update_publication(req, res, next) {
             await con.query("DELETE FROM publication_author_map WHERE publication_id = $1", [publication_id]);
             for (const author_id of authors) {
                 await con.query(
-                    "INSERT INTO publication_author_map (publication_id, author_id) VALUES ($1, $2)",
+                    "INSERT INTO publication_author_map (publication_id, publication_author_id) VALUES ($1, $2)",
                     [publication_id, author_id]
                 );
             }
@@ -272,7 +271,6 @@ export async function patch_update_publication(req, res, next) {
                 );
             }
         }
-
 
         await con.query("COMMIT");
         res.json({ message: "Publication updated successfully", publication_id });
